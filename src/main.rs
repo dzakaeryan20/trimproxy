@@ -1,25 +1,17 @@
-use axum::{routing::get, Router};
-use std::net::SocketAddr;
-use tracing_subscriber;
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .init();
-
-    // Definisi router dengan endpoint sederhana
-    let app = Router::new().route("/health", get(health_check));
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    tracing::info!("Listening on {}", addr);
-
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+async fn index() -> impl Responder {
+    HttpResponse::Ok().body("Hello, World!")
 }
 
-async fn health_check() -> &'static str {
-    "OK"
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(|| {
+        App::new()
+            .route("/", web::get().to(index))
+    })
+    .bind("127.0.0.1:3000")?
+    .run()
+    .await
 }
+
