@@ -9,29 +9,24 @@ pub async fn proxy(
     body: web::Bytes,
     client: web::Data<Arc<Client>>,
 ) -> HttpResponse {
+    let host = req.headers().get("host").and_then(|h| h.to_str().ok()).unwrap_or(""); 
     let config_path = match env::var("CONFIG_PATH") {
         Ok(path) => path,
         Err(_) => return HttpResponse::InternalServerError().body("CONFIG_PATH not found in .env"),
     };
 
-    let config = match load_config(&config_path) {
+    let config = match load_config(&config_path,host) {
         Ok(cfg) => cfg,
         Err(_) => return HttpResponse::InternalServerError().body("Failed to load config"),
     };
-    println!("Req Url: {:?}", req.uri().to_string());
-    println!("Config: {:?}", config.frontend_bind);
-    let target_url = format!("{}{}", config.frontend_bind, req.uri().to_string());
-    println!("Request to: {}", target_url);
+    let target_url = format!("http://{}{}", config.destination, req.uri().to_string());
     // Convert Actix HTTP method to Reqwest method
     let req_method = match Method::from_bytes(req.method().as_str().as_bytes()) {
         Ok(method) => method,
         Err(_) => return HttpResponse::InternalServerError().body("Invalid HTTP method"),
     };
-    println!("Request Method: {:?}", req_method);
     let mut req_builder = client.request(req_method, target_url);
-    println!("Request Builder 0: {:?}", req_builder);
     req_builder = req_builder.body(body.to_vec());
-    println!("Request Builder 1: {:?}", req_builder);
     // Convert headers
     for (key, value) in req.headers() {
         if let (Ok(req_key), Ok(req_value)) = (
@@ -41,10 +36,9 @@ pub async fn proxy(
             req_builder = req_builder.header(req_key, req_value);
         }
     }
-    println!("Request Builder: {:?}", req_builder);
+
     match req_builder.send().await {
         Ok(res) => {
-            println!("Response: {:?}", res);
             // Convert Reqwest status code to Actix status code
             let status = match StatusCode::from_u16(res.status().as_u16()) {
                 Ok(code) => code,
@@ -69,9 +63,7 @@ pub async fn proxy(
             }
         }
         Err(e) => {
-            eprintln!("Reqwest request failed: {:?}", e);
             HttpResponse::BadGateway().body(format!("Bad Gateway: {:?}", e))
         }
-        //Err(_) => HttpResponse::BadGateway().body("Bad Gateway"),
     }
 }

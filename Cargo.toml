@@ -10,3 +10,4 @@ tokio = "1.44.0"
 reqwest = "0.12.12"
 openssl = { version = "0.10.71", features = ["vendored"] }
 env_logger = "0.10.0"
+actix-rt = "2"

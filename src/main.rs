@@ -18,7 +18,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(client.clone())) // Registrasi client
             .default_service(web::to(pkg::proxy_module::proxy::proxy))
     })
-    .bind("127.0.0.1:8080")?
+    .bind("127.0.1.4:8080")?
     .run()
     .await
 }
