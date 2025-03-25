@@ -15,7 +15,7 @@ pub struct ProxyConfig {
     pub destination: String,
 }
 
-pub fn parse_config(file_path: &str) -> ProxyConfig {
+pub fn parse_config(file_path: &str, host: &str) -> ProxyConfig {
     let file = File::open(file_path).expect("Failed to open config file");
     let reader = BufReader::new(file);
 
@@ -24,6 +24,7 @@ pub fn parse_config(file_path: &str) -> ProxyConfig {
     let mut backends = HashMap::new();
     let mut current_backend = None;
     let mut destination = String::new();
+    let mut temp_index = false;
 
     for line in reader.lines() {
         let line = line.unwrap();
@@ -31,30 +32,36 @@ pub fn parse_config(file_path: &str) -> ProxyConfig {
         if parts.is_empty() {
             continue;
         }
-
         match parts[0] {
             "frontend" if parts.len() > 1 => {
                 frontend_bind = parts[1].to_string();
                 current_backend = None; // Reset backend context
             }
             "use_backend" => {
-                // Extract the host rule from `{ req.hdr(host) -i example.com }`
-                if let Some(start) = line.find("{ req.hdr(host) -i ") {
-                    let start_index = start + "{ req.hdr(host) -i ".len();
-                    if let Some(end_index) = line[start_index..].find(" }") {
-                        frontend_host_rule = Some(line[start_index..start_index + end_index].to_string());
-                    }
+                // Extract the host rule from `{ req.hdr(host) -i example.com }`prin
+                if parts[6] == host {
+                    current_backend = Some(parts[1].to_string());
+                    backends.insert(parts[1].to_string(), Backend { servers: vec![] });
+                    frontend_host_rule = Some(parts[6].to_string()); 
                 }
+                
             }
             "backend" if parts.len() > 1 => {
-                current_backend = Some(parts[1].to_string());
-                backends.insert(parts[1].to_string(), Backend { servers: vec![] });
+                if current_backend == Some(parts[1].to_string()) {
+                    current_backend = Some(parts[1].to_string());   
+                    backends.insert(parts[1].to_string(), Backend { servers: vec![] });
+                    temp_index = true
+                }
             }
             "server" if parts.len() > 2 => {
                 if let Some(backend_name) = &current_backend {
                     if let Some(backend) = backends.get_mut(backend_name) {
-                        backend.servers.push(parts[2].to_string());
-                        destination = parts[2].to_string();
+                        if temp_index == true {
+                            backend.servers.push(parts[2].to_string());
+                            destination = parts[2].to_string();
+                            temp_index = false;
+                        }
+                        
                     }
                 }
             }
@@ -71,8 +78,8 @@ pub fn parse_config(file_path: &str) -> ProxyConfig {
 }
 
 pub fn load_config(file_path: &str, host: &str) -> Result<ProxyConfig, &'static str> {
-    let config = parse_config(file_path);
-
+    let config = parse_config(file_path, host);
+    
     if config.frontend_bind.is_empty() || config.backends.is_empty() {
         return Err("Invalid config");
     }
